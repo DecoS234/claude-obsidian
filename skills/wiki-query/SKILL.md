@@ -1,6 +1,6 @@
 ---
 name: wiki-query
-description: "Answer questions using the Obsidian wiki vault. Reads hot cache first, then index, then relevant pages. Synthesizes answers with citations. Files good answers back as wiki pages. Supports quick, standard, and deep modes. Triggers on: what do you know about, query:, what is, explain, summarize, find in wiki, search the wiki, based on the wiki, wiki query quick, wiki query deep."
+description: "Answer questions using the Obsidian wiki vault. Reads hot cache first, then index, then relevant pages. Synthesizes answers with citations. Files good answers back as wiki pages. Supports quick, standard, and deep modes. Tracks already-read pages within a session to avoid redundant reads. Triggers on: what do you know about, query:, what is, explain, summarize, find in wiki, search the wiki, based on the wiki, wiki query quick, wiki query deep."
 allowed-tools: Read Glob Grep
 ---
 
@@ -10,12 +10,25 @@ The wiki has already done the synthesis work. Read strategically, answer precise
 
 ---
 
+## Session Page Register
+
+**Critical**: Maintain a mental register of pages already read in this conversation. Before reading any page, check whether you have already loaded it this session. If yes, use that context directly — do not re-read.
+
+This register exists only in working memory. It resets at the start of each session. Format mentally as:
+```
+Read this session: [wiki/hot.md, wiki/index.md, wiki/concepts/ExamplePage.md, ...]
+```
+
+For follow-up questions in the same conversation: synthesize from already-loaded context first. Only read new pages when the question genuinely requires content not yet loaded.
+
+---
+
 ## Query Modes
 
 Three depths. Choose based on the question complexity.
 
 | Mode | Trigger | Reads | Token cost | Best for |
-|------|---------|-------|------------|---------|
+|------|---------|-------|------------|---------| 
 | **Quick** | `query quick: ...` or simple factual Q | hot.md + index.md only | ~1,500 | "What is X?", date lookups, quick facts |
 | **Standard** | default (no flag) | hot.md + index + 3-5 pages | ~3,000 | Most questions |
 | **Deep** | `query deep: ...` or "thorough", "comprehensive" | Full wiki + optional web | ~8,000+ | "Compare A vs B across everything", synthesis, gap analysis |
@@ -26,8 +39,8 @@ Three depths. Choose based on the question complexity.
 
 Use when the answer is likely in the hot cache or index summary.
 
-1. Read `wiki/hot.md`. If it answers the question, respond immediately.
-2. If not, read `wiki/index.md`. Scan descriptions for the answer.
+1. Read `wiki/hot.md` (skip if already read this session). If it answers the question, respond immediately.
+2. If not, read `wiki/index.md` (skip if already read). Scan descriptions for the answer.
 3. If found in index summary, respond and do not open any pages.
 4. If not found, say "Not in quick cache. Run as standard query?"
 
@@ -37,12 +50,14 @@ Do not open individual wiki pages in quick mode.
 
 ## Standard Query Workflow
 
-1. **Read** `wiki/hot.md` first. It may already have the answer or directly relevant context.
-2. **Read** `wiki/index.md` to find the most relevant pages (scan for titles and descriptions).
-3. **Read** those pages. Follow wikilinks to depth-2 for key entities. No deeper.
-4. **Synthesize** the answer in chat. Cite sources with wikilinks: `(Source: [[Page Name]])`.
-5. **Offer to file** the answer: "This analysis seems worth keeping. Should I save it as `wiki/questions/answer-name.md`?"
-6. If the question reveals a **gap**: say "I don't have enough on X. Want to find a source?"
+1. **Check session register.** If hot.md or index.md are already loaded, skip re-reading them and use that context.
+2. **Read** `wiki/hot.md` if not yet loaded. It may already have the answer.
+3. **Read** `wiki/index.md` if needed to locate relevant pages.
+4. **Read** those pages (check register first — skip already-loaded ones). Follow wikilinks to depth-2 for key entities. No deeper.
+5. **Synthesize** the answer in chat. Cite sources with wikilinks: `(Source: [[Page Name]])`.
+6. **Progressive disclosure**: give the core answer first. Then offer: "Want me to go deeper on [aspect]?" Do not dump everything at once.
+7. **Offer to file** the answer: "This analysis seems worth keeping. Should I save it as `wiki/questions/answer-name.md`?"
+8. If the question reveals a **gap**: say "I don't have enough on X. Want me to autoresearch it?" (triggers `autoresearch` skill if confirmed).
 
 ---
 
@@ -50,12 +65,26 @@ Do not open individual wiki pages in quick mode.
 
 Use for synthesis questions, comparisons, or "tell me everything about X."
 
-1. Read `wiki/hot.md` and `wiki/index.md`.
-2. Identify all relevant sections (concepts, entities, sources, comparisons).
-3. Read every relevant page. No skipping.
-4. If wiki coverage is thin, offer to supplement with web search.
-5. Synthesize a comprehensive answer with full citations.
-6. Always file the result back as a wiki page. Deep answers are too valuable to lose.
+1. Check session register. Use all pages already loaded.
+2. Read `wiki/hot.md` and `wiki/index.md` if not already in register.
+3. Identify all relevant sections (concepts, entities, sources, comparisons).
+4. Read every relevant page not already in register. No skipping.
+5. If wiki coverage is thin, offer to supplement with web search.
+6. Synthesize a comprehensive answer with full citations.
+7. Always file the result back as a wiki page. Deep answers are too valuable to lose.
+
+---
+
+## Follow-Up Questions
+
+When the user asks a follow-up question in the same conversation:
+
+1. **Do not re-read** hot.md or index.md. Use already-loaded context.
+2. Check if the follow-up requires new pages not yet in the session register.
+3. If yes, read only those new pages.
+4. If no, synthesize immediately from existing context.
+
+This keeps follow-up queries near-zero token cost.
 
 ---
 
@@ -64,13 +93,30 @@ Use for synthesis questions, comparisons, or "tell me everything about X."
 Read the minimum needed:
 
 | Start with | Cost (approx) | When to stop |
-|------------|---------------|--------------|
+|------------|---------------|--------------| 
 | hot.md | ~500 tokens | If it has the answer |
 | index.md | ~1000 tokens | If you can identify 3-5 relevant pages |
 | 3-5 wiki pages | ~300 tokens each | Usually sufficient |
 | 10+ wiki pages | expensive | Only for synthesis across the entire wiki |
 
-If hot.md has the answer, respond without reading further.
+If hot.md has the answer, respond without reading further. If a page is already in the session register, its token cost is zero for this query.
+
+---
+
+## Gap Handling
+
+If the question cannot be answered from the wiki:
+
+1. Say clearly: "I don't have enough in the wiki to answer this well."
+2. Identify the specific gap: "I have nothing on [subtopic]."
+3. Suggest: "Want me to autoresearch this? I'll search, synthesize, and file pages back into the wiki." (offer `/autoresearch [gap topic]`)
+4. Do not fabricate. Do not answer from training data if the question is about the specific domain in this wiki.
+
+Gap types and responses:
+- **No pages at all**: offer autoresearch
+- **Pages exist but thin**: offer to find a source and ingest it
+- **Pages contradict**: surface the contradiction, ask user to clarify which claim to keep
+- **Pages are stale**: flag which pages have not been updated and offer to re-research
 
 ---
 
@@ -151,14 +197,3 @@ status: developing
 Then write the answer as the page body. Include citations. Link every mentioned concept or entity.
 
 After filing, add an entry to `wiki/index.md` under Questions and append to `wiki/log.md`.
-
----
-
-## Gap Handling
-
-If the question cannot be answered from the wiki:
-
-1. Say clearly: "I don't have enough in the wiki to answer this well."
-2. Identify the specific gap: "I have nothing on [subtopic]."
-3. Suggest: "Want to find a source on this? I can help you search or process one."
-4. Do not fabricate. Do not answer from training data if the question is about the specific domain in this wiki.

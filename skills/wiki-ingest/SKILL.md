@@ -30,9 +30,17 @@ Before ingesting any file, check `.raw/.manifest.json` to avoid re-processing un
       "pages_created": ["wiki/sources/article-slug.md", "wiki/entities/Person.md"],
       "pages_updated": ["wiki/index.md"]
     }
+  },
+  "urls": {
+    "https://example.com/article": {
+      "saved_to": ".raw/articles/article-slug-2026-04-08.md",
+      "fetched_at": "2026-04-08"
+    }
   }
 }
 ```
+
+**URL deduplication**: Before fetching any URL, check the `urls` map in the manifest. If the URL is already present, report: "Already fetched on [date] → saved as [path]. Re-ingest that file, or use `force` to re-fetch." Do not re-fetch unless the user says `force`.
 
 **Before ingesting a file:**
 1. Compute a hash: `md5sum [file] | cut -d' ' -f1` (or `sha256sum` on Linux).
@@ -41,8 +49,9 @@ Before ingesting any file, check `.raw/.manifest.json` to avoid re-processing un
 4. If missing or hash differs, proceed with ingest.
 
 **After ingesting a file:**
-1. Record `{hash, ingested_at, pages_created, pages_updated}` in `.manifest.json`.
-2. Write the updated manifest back.
+1. Record `{hash, ingested_at, pages_created, pages_updated}` in `.manifest.json` under `sources`.
+2. If the source was a URL fetch, also record `{saved_to, fetched_at}` under `urls[url]`.
+3. Write the updated manifest back.
 
 Skip delta checking if the user says "force ingest" or "re-ingest".
 
@@ -57,6 +66,7 @@ Steps:
 1. **Fetch** the page using WebFetch.
 2. **Clean** (optional): if `defuddle` is available (`which defuddle 2>/dev/null`), run `defuddle [url]` to strip ads, nav, and clutter. Typically saves 40-60% tokens. Fall back to raw WebFetch output if not installed.
 3. **Derive slug** from the URL path (last segment, lowercased, spaces→hyphens, strip query strings).
+3a. **Check URL manifest**: look up the URL in `.raw/.manifest.json` under `urls`. If found and user has not said `force`, report and stop.
 4. **Save** to `.raw/articles/[slug]-[YYYY-MM-DD].md` with a frontmatter header:
    ```markdown
    ---
@@ -103,13 +113,18 @@ Steps:
 1. **Read** the source completely. Do not skim.
 2. **Discuss** key takeaways with the user. Ask: "What should I emphasize? How granular?" Skip this if the user says "just ingest it."
 3. **Create** source summary in `wiki/sources/`. Use the source frontmatter schema from `references/frontmatter.md`. Assign an address per the **Address Assignment** section below.
-4. **Create or update** entity pages for every person, org, product, and repo mentioned. One page per entity. Assign addresses to new entity pages.
-5. **Create or update** concept pages for significant ideas and frameworks. Assign addresses to new concept pages.
-6. **Update** relevant domain page(s) and their `_index.md` sub-indexes.
-7. **Update** `wiki/overview.md` if the big picture changed.
-8. **Update** `wiki/index.md`. Add entries for all new pages.
-9. **Update** `wiki/hot.md` with this ingest's context.
-10. **Append** to `wiki/log.md` (new entries at the TOP):
+4. **Concept pre-check** (mandatory before creating any page): Run a quick existence check.
+   ```bash
+   grep -ri "title: "[candidate name]"" wiki/ --include="*.md" -l
+   ```
+   Also scan `wiki/index.md` for the candidate name. If a page exists, UPDATE it — do not create a duplicate. If the existing page is semantically close but not identical, note the overlap and flag for a potential merge (see `wiki-merge` skill).
+5. **Create or update** entity pages for every person, org, product, and repo mentioned. One page per entity. Assign addresses to new entity pages.
+6. **Create or update** concept pages for significant ideas and frameworks. Assign addresses to new concept pages.
+7. **Update** relevant domain page(s) and their `_index.md` sub-indexes.
+8. **Update** `wiki/overview.md` if the big picture changed.
+9. **Update** `wiki/index.md`. Add entries for all new pages.
+10. **Update** `wiki/hot.md` with this ingest's context.
+11. **Append** to `wiki/log.md` (new entries at the TOP):
     ```markdown
     ## [YYYY-MM-DD] ingest | Source Title
     - Source: `.raw/articles/filename.md`
@@ -118,7 +133,7 @@ Steps:
     - Pages updated: [[Page 3]], [[Page 4]]
     - Key insight: One sentence on what is new.
     ```
-11. **Check for contradictions.** If new info conflicts with existing pages, add `> [!contradiction]` callouts on both pages.
+12. **Check for contradictions.** If new info conflicts with existing pages, add `> [!contradiction]` callouts on both pages.
 
 ---
 
