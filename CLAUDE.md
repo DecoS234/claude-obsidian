@@ -3,7 +3,7 @@
 This folder is both a Claude Code plugin and an Obsidian vault.
 
 **Plugin name:** `claude-obsidian`
-**Skills:** `/wiki`, `/wiki-ingest`, `/wiki-query`, `/wiki-lint`, `/wiki-merge`
+**Skills:** `/wiki`, `/wiki-ingest`, `/wiki-scan`, `/wiki-query`, `/wiki-lint`, `/wiki-merge`
 **Vault path:** This directory (open in Obsidian directly)
 
 ## What This Vault Is For
@@ -79,6 +79,7 @@ Do NOT consult the wiki for:
 |-------|---------|
 | `/wiki` | Setup, scaffold, route to sub-skills |
 | `ingest [source]` | Single or batch source ingestion |
+| `/wiki-scan [paths...]` | Sweep inbox folders for new files; auto-ingest the confident matches, triage the rest |
 | `query: [question]` | Answer from wiki content |
 | `lint the wiki` | Health check |
 | `merge [[Page A]] into [[Page B]]` | Merge two semantically duplicate pages |

@@ -28,6 +28,7 @@ bash bin/setup-multi-agent.sh
 |---|---|
 | `wiki` | `/wiki`, set up wiki, scaffold vault |
 | `wiki-ingest` | ingest, ingest this url, ingest this image, batch ingest |
+| `wiki-scan` | /wiki-scan, scan my downloads, what's new in downloads, inbox sweep, find new files to ingest |
 | `wiki-query` | query, what do you know about, query quick:, query deep: |
 | `wiki-lint` | lint the wiki, health check, find orphans |
 | `wiki-fold` | fold the log, run a fold, log rollup (DragonScale Mechanism 1, opt-in) |
